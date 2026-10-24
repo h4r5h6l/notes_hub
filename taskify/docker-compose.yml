@@ -1,4 +1,3 @@
-# Will grow to 3 services (db, server, client) — starting with db only.
 services:
   db:
     image: postgres:16-alpine
@@ -8,7 +7,7 @@ services:
       POSTGRES_PASSWORD: taskify
       POSTGRES_DB: taskify
     ports:
-      - "5432:5432" # handy for local psql/GUI tools; can remove later
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -18,5 +17,27 @@ services:
       timeout: 3s
       retries: 5
 
+  server:
+    build: ./server
+    environment:
+      PGHOST: db
+      PGUSER: taskify
+      PGPASSWORD: taskify
+      PGDATABASE: taskify
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  client:
+    build: ./client
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+
 volumes:
   pgdata:
+ 
