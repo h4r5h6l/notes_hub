@@ -1,0 +1,133 @@
+# Name List — MERN stack, one compose file, three services.
+#
+#   react-app   Vite dev server (browser)      -> http://localhost:3000
+#   api-server  Express + Mongoose REST API    -> http://localhost:5000/api
+#   mongodb     MongoDB with a persistent disk -> internal only (db:27017)
+#
+# Configuration comes from .env (see .env.example). The api-server reaches
+# MongoDB through the network alias "db", so the application URI stays the
+# conventional mongodb://db:27017/namelist even though the service is named
+# "mongodb".
+
+name: ${COMPOSE_PROJECT_NAME:-namelist}
+
+services:
+  # -------------------------------------------------------------------------
+  # Database
+  # -------------------------------------------------------------------------
+  mongodb:
+    # Pinned patch version: reproducible builds and a known-good runtime.
+    # 8.0.x refuses to boot on Linux kernel >= 6.19; 8.2.3 is fixed.
+    image: mongo:8.2.3
+    restart: unless-stopped
+    # The official image reads MONGO_INITDB_ROOT_USERNAME / PASSWORD / DATABASE
+    # from this file on first boot.
+    env_file:
+      - .env
+    ports:
+      # Bound to loopback only: handy for Compass, not reachable from the LAN.
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      namelist-net:
+        aliases:
+          # Lets api-server connect to "db" as requested, without renaming
+          # the service away from its documented name "mongodb".
+          - db
+    healthcheck:
+      # "ping" is allowed before authentication, so no credentials are needed.
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval 'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # -------------------------------------------------------------------------
+  # API
+  # -------------------------------------------------------------------------
+  api-server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      # URI points at the network alias "db"; change it if you rename things.
+      # Special characters in the password must be URL-encoded in the URI.
+      MONGO_URI: "${MONGO_URI}"   #  ${MONGO_URI:?Set MONGO_URI in .env}"
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:3000}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    volumes:
+      # Bind mount for hot reload; the named volume keeps the image's
+      # node_modules from being hidden by the host directory.
+      - ./server:/app
+      - server-node-modules:/app/node_modules
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - namelist-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:5000/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # -------------------------------------------------------------------------
+  # Frontend
+  # -------------------------------------------------------------------------
+  react-app:
+    build:
+      context: ./client
+    restart: unless-stopped
+    init: true
+    environment:
+      # Vite always listens on 3000 inside the container. CLIENT_PORT only
+      # changes the published host port (see the ports mapping below).
+      CLIENT_PORT: 3000
+      # The browser talks to Vite; Vite proxies /api/* to the API over the
+      # bridge network. No CORS, no hard-coded hostnames in the React code.
+      API_PROXY_TARGET: http://api-server:5000
+    ports:
+      - "${CLIENT_PORT:-3000}:3000"
+    volumes:
+      - ./client:/app
+      - client-node-modules:/app/node_modules
+    depends_on:
+      api-server:
+        condition: service_healthy
+    networks:
+      - namelist-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  # MongoDB data survives `docker compose down` and container recreation.
+  mongo-data:
+  # Dependencies installed in the image, kept out of the host bind mount.
+  server-node-modules:
+  client-node-modules:
+
+networks:
+  namelist-net:
+    driver: bridge
