@@ -17,7 +17,14 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN ?? 'http://localhost:3000')
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json({ limit: '10kb' }));
 
-// Liveness + readiness in one endpoint: the API is only "ok" once Mongo is up.
+// Liveness: is the process alive? Deliberately independent of MongoDB, so a
+// database outage does not make Kubernetes restart every API pod.
+app.get('/health/live', (_req, res) => {
+  res.json({ status: 'ok', uptime: Math.round(process.uptime()) });
+});
+
+// Readiness: the API is only "ok" once Mongo is connected. Also used by the
+// Docker Compose healthcheck, so the path and response shape stay unchanged.
 app.get('/health', (_req, res) => {
   const dbReady = mongoose.connection.readyState === 1;
   res.status(dbReady ? 200 : 503).json({

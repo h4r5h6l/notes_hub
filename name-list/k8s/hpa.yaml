@@ -1,0 +1,57 @@
+# CPU-based Horizontal Pod Autoscaler for the stateless API.
+#
+# Prerequisites (both are required, or TARGETS stays <unknown>):
+#   1. metrics-server:
+#        minikube addons enable metrics-server
+#        kubectl wait --for=condition=available \
+#          apiservice/v1beta1.metrics.k8s.io --timeout=120s
+#   2. CPU requests on the api container (already set: 100m in deployment.yaml)
+#
+# Apply after the Deployment:
+#   kubectl apply -f k8s/hpa.yaml
+#   kubectl get hpa api -w
+#
+# The HPA now controls the replica count of Deployment/api between 2 and 6.
+# Applying deployment.yaml again resets replicas to 2 once, then the HPA
+# recalculates on its next sync (a few seconds).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          # Average CPU across pods, as a percentage of the 100m request.
+          # 60% of 100m = 60m per pod.
+          type: Utilization
+          averageUtilization: 60
+  behavior:
+    scaleUp:
+      # React quickly to a burst, at most doubling every 30 seconds.
+      stabilizationWindowSeconds: 15
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+    scaleDown:
+      # Scale down slowly so a short burst does not cause flapping.
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60

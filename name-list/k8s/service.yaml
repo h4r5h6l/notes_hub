@@ -1,0 +1,55 @@
+# Services for the Name List app.
+#
+#   client   NodePort 30080 -> http://<minikube-ip>:30080  (public entry point)
+#   api      ClusterIP 5000, reached by the client's Nginx /api proxy
+#   mongodb  ClusterIP 27017, reached by the API
+#
+# Apply this file before deployment.yaml so "api" and "mongodb" resolve.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  labels:
+    app: mongodb
+spec:
+  type: ClusterIP
+  selector:
+    app: mongodb
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client
+  labels:
+    app: client
+spec:
+  # NodePort keeps the UI reachable without an Ingress controller.
+  # 30080 is fixed so the URL is predictable: http://<minikube-ip>:30080
+  type: NodePort
+  selector:
+    app: client
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30080
