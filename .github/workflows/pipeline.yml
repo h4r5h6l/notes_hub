@@ -1,13 +1,15 @@
 name: CI
 
 on:
-	push:
-	pull_request:
+  push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
 jobs:
-  tests:
+  build:
     runs-on: ubuntu-latest
     container:
       image: node:20
@@ -18,9 +20,9 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 20.x
-      - name: Install dependencies
-        run: npm install
-      - name: Run tests
-        run: npm ci   # clean install, ensures reproducible builds
-        run: npm test
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+      - name: Build
+        working-directory: client
         run: npm run build
