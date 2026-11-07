@@ -1,0 +1,16 @@
+{
+  "name": "name-list",
+  "version": "1.0.0",
+  "description": "A deliberately small \"Name List\" CRUD app split into independent services:",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "run": "node client/src/index.js",
+    "test": "node server/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
