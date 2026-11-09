@@ -1,0 +1,35 @@
+# Ingress: one entry point for the Name List app.
+#   /api/...  -> api Service (Express, port 5000)
+#   /         -> client Service (Nginx + React, port 80)
+#
+# Requires an Ingress controller (ingress-nginx):
+#   Minikube:        minikube addons enable ingress
+#   Docker Desktop:  kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/cloud/deploy.yaml
+#
+# Apply after service.yaml and deployment.yaml:
+#   kubectl apply -f k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: namelist
+  labels:
+    app: namelist
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 5000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client
+                port:
+                  number: 80
